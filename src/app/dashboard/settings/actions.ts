@@ -22,17 +22,43 @@ export async function createStaffAccount(
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
   const fullName = formData.get("full_name") as string;
-  const role = formData.get("role") as string;
+  // Only an explicit "admin" selection creates an admin; anything else is staff.
+  const role: "admin" | "staff" =
+    formData.get("role") === "admin" ? "admin" : "staff";
 
   const admin = createAdminClient();
-  const { error } = await admin.auth.admin.createUser({
+  const { data: created, error } = await admin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
-    user_metadata: { full_name: fullName, role },
+    user_metadata: { full_name: fullName },
   });
 
-  if (error) return { error: error.message };
+  if (error || !created.user) {
+    return { error: error?.message ?? "The account could not be created." };
+  }
+
+  // The database trigger (handle_new_user) always creates a new profile as
+  // 'staff' by design, so the role picked in the form is applied here as a
+  // separate step. This runs with the service-role client, and the action is
+  // already restricted to admins by requireAdmin() above.
+  if (role === "admin") {
+    const { data: updated, error: roleError } = await admin
+      .from("profiles")
+      .update({ role })
+      .eq("id", created.user.id)
+      .select("id");
+
+    if (roleError || !updated?.length) {
+      // Roll back, so an account is never left behind with the wrong role.
+      await admin.auth.admin.deleteUser(created.user.id);
+      return {
+        error:
+          roleError?.message ??
+          "The account could not be set up as an administrator. Please try again.",
+      };
+    }
+  }
 
   revalidatePath("/dashboard/settings");
   return { success: true };
