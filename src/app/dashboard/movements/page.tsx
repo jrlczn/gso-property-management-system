@@ -1,5 +1,6 @@
+
 import Link from "next/link";
-import { FileText, QrCode } from "lucide-react";
+import { FileText, QrCode, Pencil } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -32,18 +33,37 @@ export default async function MovementsPage() {
         "*, assets(asset_code, asset_name), accountable_officers(first_name, last_name), offices(office_name)",
       )
       .order("assigned_date", { ascending: false }),
+
     supabase
       .from("assets")
       .select("*")
       .neq("status", "disposed")
       .order("asset_name"),
-    supabase.from("accountable_officers").select("*").eq("status", "active"),
-    supabase.from("offices").select("*").order("office_name"),
-    supabase.from("par_records").select("par_id, par_no, assignment_id"),
-    supabase.from("ics_records").select("ics_id, ics_no, assignment_id"),
+
+    supabase
+      .from("accountable_officers")
+      .select("*")
+      .eq("status", "active"),
+
+    supabase
+      .from("offices")
+      .select("*")
+      .order("office_name"),
+
+    supabase
+      .from("par_records")
+      .select("par_id, par_no, assignment_id"),
+
+    supabase
+      .from("ics_records")
+      .select("ics_id, ics_no, assignment_id"),
   ]);
 
-  const docByAssignment = new Map<number, { docNo: string; href: string }>();
+  const docByAssignment = new Map<
+    number,
+    { docNo: string; href: string }
+  >();
+
   parRecords?.forEach((r) => {
     if (r.assignment_id) {
       docByAssignment.set(r.assignment_id, {
@@ -52,6 +72,7 @@ export default async function MovementsPage() {
       });
     }
   });
+
   icsRecords?.forEach((r) => {
     if (r.assignment_id) {
       docByAssignment.set(r.assignment_id, {
@@ -63,6 +84,7 @@ export default async function MovementsPage() {
 
   return (
     <div className="space-y-6">
+      {/* PAGE HEADER */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
@@ -72,6 +94,8 @@ export default async function MovementsPage() {
             Track asset transfers, issuances, and returns
           </p>
         </div>
+
+        {/* CREATE MOVEMENT */}
         <MovementFormDialog
           assets={assets ?? []}
           officers={officers ?? []}
@@ -81,6 +105,7 @@ export default async function MovementsPage() {
 
       <Card>
         <CardContent>
+          {/* DESKTOP TABLE */}
           <div className="hidden overflow-x-auto md:block">
             <Table>
               <TableHeader>
@@ -92,13 +117,19 @@ export default async function MovementsPage() {
                   <TableHead>Officer</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Remarks</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="text-right">
+                    Actions
+                  </TableHead>
                 </TableRow>
               </TableHeader>
+
               <TableBody>
                 {assignments && assignments.length > 0 ? (
                   assignments.map((row) => {
-                    const doc = docByAssignment.get(row.assignment_id);
+                    const doc = docByAssignment.get(
+                      row.assignment_id
+                    );
+
                     return (
                       <TableRow key={row.assignment_id}>
                         <TableCell className="font-medium">
@@ -114,6 +145,7 @@ export default async function MovementsPage() {
                             "—"
                           )}
                         </TableCell>
+
                         <TableCell>
                           <div className="font-medium">
                             {row.assets?.asset_name ?? "—"}
@@ -122,27 +154,68 @@ export default async function MovementsPage() {
                             {row.assets?.asset_code}
                           </div>
                         </TableCell>
+
                         <TableCell>
                           <StatusBadge status={row.status} />
                         </TableCell>
-                        <TableCell>{row.offices?.office_name ?? "—"}</TableCell>
+
+                        <TableCell>
+                          {row.offices?.office_name ?? "—"}
+                        </TableCell>
+
                         <TableCell>
                           {row.accountable_officers
                             ? `${row.accountable_officers.first_name} ${row.accountable_officers.last_name}`
                             : "—"}
                         </TableCell>
-                        <TableCell>{formatDate(row.assigned_date)}</TableCell>
+
+                        <TableCell>
+                          {formatDate(row.assigned_date)}
+                        </TableCell>
+
                         <TableCell className="max-w-48 truncate text-muted-foreground">
                           {row.remarks ?? "—"}
                         </TableCell>
+
+                        {/* DESKTOP ACTIONS */}
                         <TableCell className="text-right">
-                          {row.status !== "returned" && (
-                            <Button asChild variant="ghost" size="sm" title="Print sticker now that custody is known">
-                              <Link href={`/dashboard/assets/${row.asset_id}/sticker`}>
-                                <QrCode className="h-4 w-4" /> Sticker
-                              </Link>
-                            </Button>
-                          )}
+                          <div className="flex justify-end gap-1">
+
+                            {/* EDIT MOVEMENT BUTTON */}
+                            <MovementFormDialog
+                              key={row.assignment_id}
+                              assets={assets ?? []}
+                              officers={officers ?? []}
+                              offices={offices ?? []}
+                              assignment={row}
+                              trigger={
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  title="Edit transaction"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              }
+                            />
+
+                            {/* PRINT STICKER */}
+                            {row.status !== "returned" && (
+                              <Button
+                                asChild
+                                variant="ghost"
+                                size="sm"
+                                title="Print sticker"
+                              >
+                                <Link
+                                  href={`/dashboard/assets/${row.asset_id}/sticker`}
+                                >
+                                  <QrCode className="h-4 w-4" />
+                                  Sticker
+                                </Link>
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -161,10 +234,14 @@ export default async function MovementsPage() {
             </Table>
           </div>
 
+          {/* MOBILE CARDS */}
           <div className="space-y-3 md:hidden">
             {assignments && assignments.length > 0 ? (
               assignments.map((row) => {
-                const doc = docByAssignment.get(row.assignment_id);
+                const doc = docByAssignment.get(
+                  row.assignment_id
+                );
+
                 return (
                   <div
                     key={row.assignment_id}
@@ -179,11 +256,15 @@ export default async function MovementsPage() {
                           {row.assets?.asset_code}
                         </div>
                       </div>
+
                       <StatusBadge status={row.status} />
                     </div>
+
                     <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
                       <div>
-                        <p className="text-muted-foreground">Doc No.</p>
+                        <p className="text-muted-foreground">
+                          Doc No.
+                        </p>
                         <p className="font-medium">
                           {doc ? (
                             <Link
@@ -198,38 +279,85 @@ export default async function MovementsPage() {
                           )}
                         </p>
                       </div>
+
                       <div>
-                        <p className="text-muted-foreground">Department</p>
+                        <p className="text-muted-foreground">
+                          Department
+                        </p>
                         <p className="font-medium">
                           {row.offices?.office_name ?? "—"}
                         </p>
                       </div>
+
                       <div>
-                        <p className="text-muted-foreground">Officer</p>
+                        <p className="text-muted-foreground">
+                          Officer
+                        </p>
                         <p className="font-medium">
                           {row.accountable_officers
                             ? `${row.accountable_officers.first_name} ${row.accountable_officers.last_name}`
                             : "—"}
                         </p>
                       </div>
+
                       <div>
-                        <p className="text-muted-foreground">Date</p>
-                        <p className="font-medium">{formatDate(row.assigned_date)}</p>
+                        <p className="text-muted-foreground">
+                          Date
+                        </p>
+                        <p className="font-medium">
+                          {formatDate(row.assigned_date)}
+                        </p>
                       </div>
+
                       <div className="col-span-2">
-                        <p className="text-muted-foreground">Remarks</p>
-                        <p className="font-medium">{row.remarks ?? "—"}</p>
+                        <p className="text-muted-foreground">
+                          Remarks
+                        </p>
+                        <p className="font-medium">
+                          {row.remarks ?? "—"}
+                        </p>
                       </div>
                     </div>
-                    {row.status !== "returned" && (
-                      <div className="mt-3 flex justify-end border-t border-border/60 pt-2">
-                        <Button asChild variant="ghost" size="sm" title="Print sticker now that custody is known">
-                          <Link href={`/dashboard/assets/${row.asset_id}/sticker`}>
-                            <QrCode className="h-4 w-4" /> Sticker
+
+                    {/* MOBILE ACTIONS */}
+                    <div className="mt-3 flex justify-end gap-1 border-t border-border/60 pt-2">
+
+                      {/* EDIT MOVEMENT BUTTON */}
+                      <MovementFormDialog
+                        key={row.assignment_id}
+                        assets={assets ?? []}
+                        officers={officers ?? []}
+                        offices={offices ?? []}
+                        assignment={row}
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Edit transaction"
+                          >
+                            <Pencil className="h-4 w-4" />
+                            Edit
+                          </Button>
+                        }
+                      />
+
+                      {/* PRINT STICKER */}
+                      {row.status !== "returned" && (
+                        <Button
+                          asChild
+                          variant="ghost"
+                          size="sm"
+                          title="Print sticker"
+                        >
+                          <Link
+                            href={`/dashboard/assets/${row.asset_id}/sticker`}
+                          >
+                            <QrCode className="h-4 w-4" />
+                            Sticker
                           </Link>
                         </Button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 );
               })
