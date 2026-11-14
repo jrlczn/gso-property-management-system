@@ -13,8 +13,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { MovementFormDialog } from "@/components/movement-form-dialog";
+import { DeleteButton } from "@/components/delete-button";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
+import { deleteMovement } from "@/app/dashboard/movements/actions";
 
 export default async function MovementsPage() {
   const supabase = await createClient();
@@ -127,7 +129,7 @@ export default async function MovementsPage() {
                 {assignments && assignments.length > 0 ? (
                   assignments.map((row) => {
                     const doc = docByAssignment.get(
-                      row.assignment_id
+                      row.assignment_id,
                     );
 
                     return (
@@ -180,8 +182,7 @@ export default async function MovementsPage() {
                         {/* DESKTOP ACTIONS */}
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
-
-                            {/* EDIT MOVEMENT BUTTON */}
+                            {/* EDIT */}
                             <MovementFormDialog
                               key={row.assignment_id}
                               assets={assets ?? []}
@@ -197,6 +198,15 @@ export default async function MovementsPage() {
                                   <Pencil className="h-4 w-4" />
                                 </Button>
                               }
+                            />
+
+                            {/* DELETE */}
+                            <DeleteButton
+                              action={deleteMovement.bind(
+                                null,
+                                row.assignment_id,
+                              )}
+                              confirmMessage="Are you sure you want to delete this transaction? This action cannot be undone."
                             />
 
                             {/* PRINT STICKER */}
@@ -239,7 +249,7 @@ export default async function MovementsPage() {
             {assignments && assignments.length > 0 ? (
               assignments.map((row) => {
                 const doc = docByAssignment.get(
-                  row.assignment_id
+                  row.assignment_id,
                 );
 
                 return (
@@ -321,8 +331,7 @@ export default async function MovementsPage() {
 
                     {/* MOBILE ACTIONS */}
                     <div className="mt-3 flex justify-end gap-1 border-t border-border/60 pt-2">
-
-                      {/* EDIT MOVEMENT BUTTON */}
+                      {/* EDIT */}
                       <MovementFormDialog
                         key={row.assignment_id}
                         assets={assets ?? []}
@@ -339,6 +348,15 @@ export default async function MovementsPage() {
                             Edit
                           </Button>
                         }
+                      />
+
+                      {/* DELETE */}
+                      <DeleteButton
+                        action={deleteMovement.bind(
+                          null,
+                          row.assignment_id,
+                        )}
+                        confirmMessage="Are you sure you want to delete this transaction? This action cannot be undone."
                       />
 
                       {/* PRINT STICKER */}
