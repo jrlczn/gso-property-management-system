@@ -4,6 +4,7 @@ import { revalidatePath, updateTag } from "next/cache";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { blockedMessage, deleteErrorMessage } from "@/lib/delete-messages";
 import type { FormActionState } from "@/hooks/use-form-success";
 
 export async function createStaffAccount(
@@ -92,6 +93,58 @@ export async function updateUserStatus(
   return undefined;
 }
 
+export async function deleteUserAccount(userId: string) {
+  const me = await requireAdmin();
+  if (me.id === userId) {
+    return { error: "You can't delete the account you are logged in with." };
+  }
+
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return {
+      error:
+        "SUPABASE_SERVICE_ROLE_KEY is not configured on the server. Add it to .env.local (get it from Supabase Dashboard > Project Settings > API Keys) to enable account deletion.",
+    };
+  }
+
+  const supabase = await createClient();
+  const { data: target } = await supabase
+    .from("profiles")
+    .select("full_name, email")
+    .eq("id", userId)
+    .maybeSingle();
+  const label = target?.full_name || target?.email || "This account";
+
+  // Every PAR / ICS keeps the name of the user who issued it, so an account
+  // that issued any cannot be removed - it can only be deactivated.
+  const [par, ics] = await Promise.all([
+    supabase
+      .from("par_records")
+      .select("*", { count: "exact", head: true })
+      .eq("issued_by", userId),
+    supabase
+      .from("ics_records")
+      .select("*", { count: "exact", head: true })
+      .eq("issued_by", userId),
+  ]);
+  const issued = (par.count ?? 0) + (ics.count ?? 0);
+  if (issued > 0) {
+    return {
+      error: `"${label}" can't be deleted because this account issued ${issued} PAR/ICS ${issued === 1 ? "record" : "records"}, and those must stay on file. Use Deactivate instead to stop this account from logging in.`,
+    };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.auth.admin.deleteUser(userId);
+  if (error) {
+    return {
+      error: `"${label}" could not be deleted (${error.message}). Use Deactivate instead if you only need to stop this account from logging in.`,
+    };
+  }
+
+  revalidatePath("/dashboard/settings");
+  return undefined;
+}
+
 export async function createCategory(
   _prevState: FormActionState,
   formData: FormData,
@@ -112,11 +165,32 @@ export async function createCategory(
 export async function deleteCategory(categoryId: number) {
   await requireAdmin();
   const supabase = await createClient();
+
+  const { data: category } = await supabase
+    .from("categories")
+    .select("category_name")
+    .eq("category_id", categoryId)
+    .maybeSingle();
+  const label = category?.category_name ?? "This category";
+  const advice = "Change those assets to another category first.";
+
+  const assets = await supabase
+    .from("assets")
+    .select("*", { count: "exact", head: true })
+    .eq("category_id", categoryId);
+
+  const blocked = blockedMessage(
+    label,
+    [{ count: assets.count, singular: "asset", plural: "assets" }],
+    advice,
+  );
+  if (blocked) return { error: blocked };
+
   const { error } = await supabase
     .from("categories")
     .delete()
     .eq("category_id", categoryId);
-  if (error) return { error: error.message };
+  if (error) return { error: deleteErrorMessage(error, label, advice) };
 
   revalidatePath("/dashboard/settings");
   return undefined;
@@ -143,8 +217,48 @@ export async function createOffice(
 export async function deleteOffice(officeId: number) {
   await requireAdmin();
   const supabase = await createClient();
+
+  const { data: office } = await supabase
+    .from("offices")
+    .select("office_name")
+    .eq("office_id", officeId)
+    .maybeSingle();
+  const label = office?.office_name ?? "This department";
+  const advice =
+    "Move those officers and assets to another department first. Movement history is kept permanently, so a department that appears in past movements cannot be deleted.";
+
+  const [officers, assets, movements] = await Promise.all([
+    supabase
+      .from("accountable_officers")
+      .select("*", { count: "exact", head: true })
+      .eq("office_id", officeId),
+    supabase
+      .from("assets")
+      .select("*", { count: "exact", head: true })
+      .eq("assigned_office_id", officeId),
+    supabase
+      .from("asset_assignments")
+      .select("*", { count: "exact", head: true })
+      .eq("office_id", officeId),
+  ]);
+
+  const blocked = blockedMessage(
+    label,
+    [
+      { count: officers.count, singular: "officer", plural: "officers" },
+      { count: assets.count, singular: "asset", plural: "assets" },
+      {
+        count: movements.count,
+        singular: "movement record",
+        plural: "movement records",
+      },
+    ],
+    advice,
+  );
+  if (blocked) return { error: blocked };
+
   const { error } = await supabase.from("offices").delete().eq("office_id", officeId);
-  if (error) return { error: error.message };
+  if (error) return { error: deleteErrorMessage(error, label, advice) };
 
   revalidatePath("/dashboard/settings");
   return undefined;

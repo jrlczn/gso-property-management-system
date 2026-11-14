@@ -10,7 +10,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { updateUserRole, updateUserStatus } from "@/app/dashboard/settings/actions";
+import { DeleteButton } from "@/components/delete-button";
+import {
+  deleteUserAccount,
+  updateUserRole,
+  updateUserStatus,
+} from "@/app/dashboard/settings/actions";
 
 export function UserRowActions({
   userId,
@@ -61,6 +66,12 @@ export function UserRowActions({
       >
         {status === "active" ? "Deactivate" : "Reactivate"}
       </Button>
+      {!isSelf && (
+        <DeleteButton
+          action={() => deleteUserAccount(userId)}
+          confirmMessage="Delete this account permanently? This cannot be undone. (To only stop someone from logging in, use Deactivate instead.)"
+        />
+      )}
     </div>
   );
 }

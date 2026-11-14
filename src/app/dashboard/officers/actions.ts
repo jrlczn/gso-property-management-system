@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/supabase/auth";
 import { createClient } from "@/lib/supabase/server";
+import { blockedMessage, deleteErrorMessage } from "@/lib/delete-messages";
 import type { TablesInsert } from "@/lib/supabase/database.types";
 import type { FormActionState } from "@/hooks/use-form-success";
 
@@ -76,12 +77,54 @@ export async function deleteOfficer(officerId: number) {
   }
 
   const supabase = await createClient();
+
+  const { data: officer } = await supabase
+    .from("accountable_officers")
+    .select("first_name, last_name")
+    .eq("officer_id", officerId)
+    .maybeSingle();
+  const label = officer
+    ? `${officer.first_name} ${officer.last_name}`
+    : "This officer";
+  const advice =
+    "Their issuance history must be kept, so set the officer's Status to Inactive instead (Officers > Edit). Inactive officers no longer appear when issuing assets.";
+
+  const [movements, par, ics] = await Promise.all([
+    supabase
+      .from("asset_assignments")
+      .select("*", { count: "exact", head: true })
+      .eq("officer_id", officerId),
+    supabase
+      .from("par_records")
+      .select("*", { count: "exact", head: true })
+      .eq("officer_id", officerId),
+    supabase
+      .from("ics_records")
+      .select("*", { count: "exact", head: true })
+      .eq("officer_id", officerId),
+  ]);
+
+  const blocked = blockedMessage(
+    label,
+    [
+      {
+        count: movements.count,
+        singular: "movement record",
+        plural: "movement records",
+      },
+      { count: par.count, singular: "PAR record", plural: "PAR records" },
+      { count: ics.count, singular: "ICS record", plural: "ICS records" },
+    ],
+    advice,
+  );
+  if (blocked) return { error: blocked };
+
   const { error } = await supabase
     .from("accountable_officers")
     .delete()
     .eq("officer_id", officerId);
 
-  if (error) return { error: error.message };
+  if (error) return { error: deleteErrorMessage(error, label, advice) };
 
   revalidatePath("/dashboard/officers");
   return undefined;

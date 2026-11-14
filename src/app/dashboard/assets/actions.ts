@@ -1,216 +1,169 @@
-
 "use server";
 
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/supabase/auth";
 import { createClient } from "@/lib/supabase/server";
+import { blockedMessage, deleteErrorMessage } from "@/lib/delete-messages";
+import type { TablesInsert } from "@/lib/supabase/database.types";
 import type { FormActionState } from "@/hooks/use-form-success";
 
-export async function createMovement(
-  _prevState: FormActionState,
-  formData: FormData,
-): Promise<FormActionState> {
-  const profile = await requireUser();
-  const supabase = await createClient();
+export type AssetFormState = FormActionState;
 
-  const assetId = Number(formData.get("asset_id"));
-  const officerId = formData.get("officer_id")
-    ? Number(formData.get("officer_id"))
-    : null;
-  const officeId = formData.get("office_id")
-    ? Number(formData.get("office_id"))
-    : null;
+function parseAssetForm(formData: FormData): TablesInsert<"assets"> {
+  const num = (key: string) => {
+    const value = formData.get(key);
+    return value ? Number(value) : null;
+  };
+  const str = (key: string) => {
+    const value = formData.get(key);
+    return typeof value === "string" && value.length > 0 ? value : null;
+  };
 
-  const status = formData.get("status") as
-    | "issued"
-    | "returned"
-    | "transferred";
-
-  const assignedDate = formData.get("assigned_date") as string;
-  const remarks = (formData.get("remarks") as string) || null;
-  const docType = formData.get("doc_type") as "par" | "ics" | "";
-
-  const { data: assignment, error } = await supabase
-    .from("asset_assignments")
-    .insert({
-      asset_id: assetId,
-      officer_id: officerId,
-      office_id: officeId,
-      status,
-      assigned_date: assignedDate,
-      returned_date: status === "returned" ? assignedDate : null,
-      remarks,
-    })
-    .select("assignment_id")
-    .single();
-
-  if (error || !assignment) {
-    return { error: error?.message ?? "Failed to record transaction." };
-  }
-
-  const { error: custodyError } = await supabase
-    .from("assets")
-    .update({
-      assigned_office_id: status === "returned" ? null : officeId,
-    })
-    .eq("asset_id", assetId);
-
-  if (custodyError) {
-    return {
-      error: `Movement recorded, but failed to update asset custody: ${custodyError.message}`,
-    };
-  }
-
-  if ((status === "issued" || status === "transferred") && docType && officerId) {
-    const year = new Date(assignedDate).getFullYear();
-
-    const { error: docError } =
-      docType === "par"
-        ? await supabase.from("par_records").insert({
-            par_no: `PAR-${year}-${String(assignment.assignment_id).padStart(4, "0")}`,
-            asset_id: assetId,
-            officer_id: officerId,
-            assignment_id: assignment.assignment_id,
-            issue_date: assignedDate,
-            remarks,
-            issued_by: profile.id,
-          })
-        : await supabase.from("ics_records").insert({
-            ics_no: `ICS-${year}-${String(assignment.assignment_id).padStart(4, "0")}`,
-            asset_id: assetId,
-            officer_id: officerId,
-            assignment_id: assignment.assignment_id,
-            issue_date: assignedDate,
-            remarks,
-            issued_by: profile.id,
-          });
-
-    if (docError) {
-      return {
-        error: `Movement recorded, but failed to generate the ${docType.toUpperCase()}: ${docError.message}`,
-      };
-    }
-  }
-
-  revalidatePath("/dashboard/movements");
-  revalidatePath("/dashboard/assets");
-  revalidatePath("/dashboard/records");
-  revalidatePath("/dashboard");
-
-  return { success: true };
+  return {
+    asset_code: formData.get("asset_code") as string,
+    asset_name: formData.get("asset_name") as string,
+    category_id: num("category_id"),
+    description: str("description"),
+    brand: str("brand"),
+    model: str("model"),
+    serial_number: str("serial_number"),
+    acquisition_date: formData.get("acquisition_date") as string,
+    acquisition_cost: num("acquisition_cost") ?? 0,
+    useful_life_years: num("useful_life_years") ?? 1,
+    expiration_date: str("expiration_date"),
+    warranty_expiry: str("warranty_expiry"),
+    next_service_date: str("next_service_date"),
+    expiry_alert_days_before: num("expiry_alert_days_before") ?? 30,
+    warranty_alert_days_before: num("warranty_alert_days_before") ?? 30,
+    maintenance_alert_days_before: num("maintenance_alert_days_before") ?? 30,
+    assigned_office_id: num("assigned_office_id"),
+    remarks: str("remarks"),
+  };
 }
 
-// EDIT MOVEMENT
-export async function updateMovement(
-  assignmentId: number,
-  _prevState: FormActionState,
+export async function createAsset(
+  _prevState: AssetFormState,
   formData: FormData,
-): Promise<FormActionState> {
+): Promise<AssetFormState> {
   await requireUser();
   const supabase = await createClient();
 
-  const officerId = formData.get("officer_id")
-    ? Number(formData.get("officer_id"))
-    : null;
-
-  const officeId = formData.get("office_id")
-    ? Number(formData.get("office_id"))
-    : null;
-
-  const status = formData.get("status") as
-    | "issued"
-    | "returned"
-    | "transferred";
-
-  const assignedDate = formData.get("assigned_date") as string;
-  const remarks = (formData.get("remarks") as string) || null;
-
-  const { data: existing, error: fetchError } = await supabase
-    .from("asset_assignments")
-    .select("assignment_id, asset_id")
-    .eq("assignment_id", assignmentId)
-    .single();
-
-  if (fetchError || !existing) {
-    return { error: "Movement record not found." };
-  }
-
-  const { error } = await supabase
-    .from("asset_assignments")
-    .update({
-      officer_id: officerId,
-      office_id: officeId,
-      status,
-      assigned_date: assignedDate,
-      returned_date: status === "returned" ? assignedDate : null,
-      remarks,
-    })
-    .eq("assignment_id", assignmentId);
+  const { error } = await supabase.from("assets").insert(parseAssetForm(formData));
 
   if (error) {
     return { error: error.message };
   }
 
-  // Get latest movement to determine current asset custody.
-  const { data: latestMovement, error: latestError } = await supabase
-    .from("asset_assignments")
-    .select("status, office_id")
-    .eq("asset_id", existing.asset_id)
-    .order("assigned_date", { ascending: false })
-    .order("assignment_id", { ascending: false })
-    .limit(1)
-    .single();
-
-  if (latestError || !latestMovement) {
-    return { error: "Movement updated, but custody could not be recalculated." };
-  }
-
-  const { error: custodyError } = await supabase
-    .from("assets")
-    .update({
-      assigned_office_id:
-        latestMovement.status === "returned"
-          ? null
-          : latestMovement.office_id,
-    })
-    .eq("asset_id", existing.asset_id);
-
-  if (custodyError) {
-    return { error: custodyError.message };
-  }
-
-  // Update existing PAR records.
-  const { error: parError } = await supabase
-    .from("par_records")
-    .update({
-      officer_id: officerId,
-      issue_date: assignedDate,
-      remarks,
-    })
-    .eq("assignment_id", assignmentId);
-
-  if (parError) {
-    return { error: `Failed to update PAR: ${parError.message}` };
-  }
-
-  // Update existing ICS records.
-  const { error: icsError } = await supabase
-    .from("ics_records")
-    .update({
-      officer_id: officerId,
-      issue_date: assignedDate,
-      remarks,
-    })
-    .eq("assignment_id", assignmentId);
-
-  if (icsError) {
-    return { error: `Failed to update ICS: ${icsError.message}` };
-  }
-
-  revalidatePath("/dashboard/movements");
   revalidatePath("/dashboard/assets");
-  revalidatePath("/dashboard/records");
   revalidatePath("/dashboard");
-
   return { success: true };
+}
+
+export async function updateAsset(
+  assetId: number,
+  _prevState: AssetFormState,
+  formData: FormData,
+): Promise<AssetFormState> {
+  await requireUser();
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("assets")
+    .update(parseAssetForm(formData))
+    .eq("asset_id", assetId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/dashboard/assets");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+export async function deleteAsset(assetId: number) {
+  const profile = await requireUser();
+  if (profile.role !== "admin") {
+    return { error: "Only administrators can delete assets." };
+  }
+
+  const supabase = await createClient();
+
+  const { data: asset } = await supabase
+    .from("assets")
+    .select("asset_code, asset_name")
+    .eq("asset_id", assetId)
+    .maybeSingle();
+  const label = asset ? `${asset.asset_code} - ${asset.asset_name}` : "This asset";
+  const advice =
+    "An asset with history must stay on record. To take it out of service, use Disposal instead of deleting it.";
+
+  const [movements, par, ics, disposals, maintenance] = await Promise.all([
+    supabase
+      .from("asset_assignments")
+      .select("*", { count: "exact", head: true })
+      .eq("asset_id", assetId),
+    supabase
+      .from("par_records")
+      .select("*", { count: "exact", head: true })
+      .eq("asset_id", assetId),
+    supabase
+      .from("ics_records")
+      .select("*", { count: "exact", head: true })
+      .eq("asset_id", assetId),
+    supabase
+      .from("disposal")
+      .select("*", { count: "exact", head: true })
+      .eq("asset_id", assetId),
+    supabase
+      .from("maintenance")
+      .select("*", { count: "exact", head: true })
+      .eq("asset_id", assetId),
+  ]);
+
+  const blocked = blockedMessage(
+    label,
+    [
+      {
+        count: movements.count,
+        singular: "movement record",
+        plural: "movement records",
+      },
+      { count: par.count, singular: "PAR record", plural: "PAR records" },
+      { count: ics.count, singular: "ICS record", plural: "ICS records" },
+      {
+        count: disposals.count,
+        singular: "disposal record",
+        plural: "disposal records",
+      },
+      {
+        count: maintenance.count,
+        singular: "maintenance record",
+        plural: "maintenance records",
+      },
+    ],
+    advice,
+  );
+  if (blocked) return { error: blocked };
+
+  // Alerts are automatic notices (such as expiry reminders) that belong to
+  // the asset and cannot be removed from the Alerts page, so they are cleared
+  // together with the asset instead of blocking the delete.
+  const { error: alertsError } = await supabase
+    .from("alerts")
+    .delete()
+    .eq("asset_id", assetId);
+  if (alertsError) {
+    return { error: deleteErrorMessage(alertsError, label, advice) };
+  }
+
+  const { error } = await supabase.from("assets").delete().eq("asset_id", assetId);
+
+  if (error) {
+    return { error: deleteErrorMessage(error, label, advice) };
+  }
+
+  revalidatePath("/dashboard/assets");
+  revalidatePath("/dashboard");
+  return undefined;
 }

@@ -25,7 +25,8 @@ export function DeleteButton({
         startTransition(async () => {
           const result = await action();
           if (result?.error) {
-            toast.error(result.error);
+            // Stays longer than the default so a full explanation can be read.
+            toast.error(result.error, { duration: 12000 });
           } else {
             toast.success("Deleted.");
           }

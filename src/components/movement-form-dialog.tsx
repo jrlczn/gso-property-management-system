@@ -1,8 +1,8 @@
-
 "use client";
 
-import { useActionState, useState, type ReactNode } from "react";
-import { Plus, Pencil } from "lucide-react";
+import { useActionState, useState } from "react";
+import type { ReactNode } from "react";
+import { Plus } from "lucide-react";
 import { useFormSuccessEffect } from "@/hooks/use-form-success";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,7 +31,6 @@ import { todayIso } from "@/lib/format";
 type Asset = Tables<"assets">;
 type Officer = Tables<"accountable_officers">;
 type Office = Tables<"offices">;
-type Assignment = Tables<"asset_assignments">;
 
 export function MovementFormDialog({
   assets,
@@ -43,56 +42,70 @@ export function MovementFormDialog({
   assets: Asset[];
   officers: Officer[];
   offices: Office[];
-  assignment?: Assignment;
+  assignment?: Tables<"asset_assignments">;
   trigger?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState<string>("issued");
+  const [officeId, setOfficeId] = useState("");
+  const [officerId, setOfficerId] = useState("");
+  const [state, formAction, isPending] = useActionState(createMovement, null);
 
-  const [status, setStatus] = useState<string>(
-    assignment?.status ?? "issued",
+  // Clear the department/officer choice whenever the dialog closes, so it
+  // always opens blank the next time.
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    if (!next) {
+      setOfficeId("");
+      setOfficerId("");
+    }
+  }
+
+  // A different department means a different officer list, so any officer
+  // picked for the previous department is cleared.
+  function handleOfficeChange(next: string) {
+    setOfficeId(next);
+    setOfficerId("");
+  }
+
+  useFormSuccessEffect(state, "Transaction recorded.", () =>
+    handleOpenChange(false),
   );
 
-  const isEditing = !!assignment;
+  const needsDocument = status === "issued" || status === "transferred";
 
-  const action = assignment
-    ? async (
-        _prevState: Parameters<typeof createMovement>[0],
-        _formData: Parameters<typeof createMovement>[1],
-      ) => ({ error: "Movement updates are not available." })
-    : createMovement;
-
-  const [state, formAction, isPending] = useActionState(action, null);
-
-  useFormSuccessEffect(
-    state,
-    isEditing ? "Transaction updated." : "Transaction recorded.",
-    () => setOpen(false),
-  );
-
-  const needsDocument =
-    !isEditing && (status === "issued" || status === "transferred");
+  // Only officers assigned to the chosen department are offered, in A-Z
+  // order of the name as it is displayed ("First Last").
+  const officersInOffice = officeId
+    ? officers
+        .filter((officer) => officer.office_id?.toString() === officeId)
+        .sort((a, b) =>
+          `${a.first_name} ${a.last_name}`.localeCompare(
+            `${b.first_name} ${b.last_name}`,
+          ),
+        )
+    : [];
+  const officerPlaceholder = !officeId
+    ? "Select department first"
+    : officersInOffice.length === 0
+      ? "No officers in this department"
+      : "Select officer";
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        {trigger ?? (
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            New Issuance / Return
-          </Button>
-        )}
-      </DialogTrigger>
-
+  {trigger ?? (
+    <Button>
+      <Plus className="h-4 w-4" />
+      New Issuance / Return
+    </Button>
+  )}
+</DialogTrigger>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>
-            {isEditing ? "Edit Asset Movement" : "New Asset Movement"}
-          </DialogTitle>
-
+          <DialogTitle>New Asset Movement</DialogTitle>
           <DialogDescription>
-            {isEditing
-              ? "Update the existing asset movement transaction."
-              : "Record an issuance, return, or transfer of a government asset."}
+            Record an issuance, return, or transfer of a government asset.
           </DialogDescription>
         </DialogHeader>
 
@@ -100,16 +113,10 @@ export function MovementFormDialog({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="status">Transaction Type</Label>
-
-              <Select
-                name="status"
-                value={status}
-                onValueChange={setStatus}
-              >
+              <Select name="status" value={status} onValueChange={setStatus}>
                 <SelectTrigger id="status" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
-
                 <SelectContent>
                   <SelectItem value="issued">Issued</SelectItem>
                   <SelectItem value="returned">Returned</SelectItem>
@@ -117,39 +124,27 @@ export function MovementFormDialog({
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="assigned_date">Date</Label>
-
               <Input
                 id="assigned_date"
                 name="assigned_date"
                 type="date"
                 required
-                defaultValue={assignment?.assigned_date ?? todayIso()}
+                defaultValue={todayIso()}
               />
             </div>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="asset_id">Asset</Label>
-
-            <Select
-              name="asset_id"
-              required
-              disabled={isEditing}
-              defaultValue={assignment?.asset_id.toString()}
-            >
+            <Select name="asset_id" required>
               <SelectTrigger id="asset_id" className="w-full">
                 <SelectValue placeholder="Select asset" />
               </SelectTrigger>
-
               <SelectContent>
                 {assets.map((asset) => (
-                  <SelectItem
-                    key={asset.asset_id}
-                    value={asset.asset_id.toString()}
-                  >
+                  <SelectItem key={asset.asset_id} value={asset.asset_id.toString()}>
                     {asset.asset_code} &middot; {asset.asset_name}
                   </SelectItem>
                 ))}
@@ -159,42 +154,17 @@ export function MovementFormDialog({
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="officer_id">Officer</Label>
-
-              <Select
-                name="officer_id"
-                defaultValue={assignment?.officer_id?.toString() ?? ""}
-              >
-                <SelectTrigger id="officer_id" className="w-full">
-                  <SelectValue placeholder="Select officer" />
-                </SelectTrigger>
-
-                <SelectContent>
-                  {officers.map((officer) => (
-                    <SelectItem
-                      key={officer.officer_id}
-                      value={officer.officer_id.toString()}
-                    >
-                      {officer.first_name} {officer.last_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="office_id">
                 {status === "returned" ? "Returned From" : "To Department"}
               </Label>
-
               <Select
                 name="office_id"
-                defaultValue={assignment?.office_id?.toString() ?? ""}
+                value={officeId}
+                onValueChange={handleOfficeChange}
               >
                 <SelectTrigger id="office_id" className="w-full">
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
-
                 <SelectContent>
                   {offices.map((office) => (
                     <SelectItem
@@ -207,24 +177,43 @@ export function MovementFormDialog({
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="officer_id">Officer</Label>
+              <Select
+                name="officer_id"
+                value={officerId}
+                onValueChange={setOfficerId}
+                disabled={officersInOffice.length === 0}
+              >
+                <SelectTrigger id="officer_id" className="w-full">
+                  <SelectValue placeholder={officerPlaceholder} />
+                </SelectTrigger>
+                <SelectContent>
+                  {officersInOffice.map((officer) => (
+                    <SelectItem
+                      key={officer.officer_id}
+                      value={officer.officer_id.toString()}
+                    >
+                      {officer.first_name} {officer.last_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {needsDocument && (
             <div className="space-y-2">
               <Label htmlFor="doc_type">Generate Document</Label>
-
               <Select name="doc_type" defaultValue="par">
                 <SelectTrigger id="doc_type" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
-
                 <SelectContent>
                   <SelectItem value="par">
                     PAR (Property Acknowledgement Receipt)
                   </SelectItem>
-                  <SelectItem value="ics">
-                    ICS (Inventory Custodian Slip)
-                  </SelectItem>
+                  <SelectItem value="ics">ICS (Inventory Custodian Slip)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -232,13 +221,7 @@ export function MovementFormDialog({
 
           <div className="space-y-2">
             <Label htmlFor="remarks">Remarks</Label>
-
-            <Textarea
-              id="remarks"
-              name="remarks"
-              rows={2}
-              defaultValue={assignment?.remarks ?? ""}
-            />
+            <Textarea id="remarks" name="remarks" rows={2} />
           </div>
 
           {state && "error" in state && (
@@ -251,17 +234,12 @@ export function MovementFormDialog({
             <Button
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              onClick={() => handleOpenChange(false)}
             >
               Cancel
             </Button>
-
             <Button type="submit" disabled={isPending}>
-              {isPending
-                ? "Saving..."
-                : isEditing
-                  ? "Save Changes"
-                  : "Save Transaction"}
+              {isPending ? "Saving..." : "Save Transaction"}
             </Button>
           </DialogFooter>
         </form>
