@@ -14,12 +14,12 @@ export default async function ComprehensiveReportPage({
   const supabase = await createClient();
   const categoryNum = categoryId ? Number(categoryId) : undefined;
 
-  let assetsQuery = supabase
-    .from("assets")
-    .select(
-      "*, categories(category_name), offices:assigned_office_id(office_name)",
-    )
-    .order("asset_code");
+ let assetsQuery = supabase
+  .from("assets")
+  .select(
+    "*, categories(category_name), offices:assigned_office_id(office_name)",
+  )
+  .order("asset_code");
   let movementsQuery = supabase
     .from("asset_assignments")
     .select(
