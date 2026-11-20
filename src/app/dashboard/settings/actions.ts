@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { blockedMessage, deleteErrorMessage } from "@/lib/delete-messages";
 import type { FormActionState } from "@/hooks/use-form-success";
 
+
 export async function createStaffAccount(
   _prevState: FormActionState,
   formData: FormData,
@@ -325,25 +326,48 @@ export async function deleteTeamMember(id: number) {
   return undefined;
 }
 
+
 export async function updateSiteBranding(
   _prevState: FormActionState,
   formData: FormData,
 ): Promise<FormActionState> {
   await requireAdmin();
+
   const supabase = await createClient();
 
   const logoUrl = (formData.get("logo_url") as string) || null;
   const faviconUrl = (formData.get("favicon_url") as string) || null;
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("site_settings")
-    .update({ logo_url: logoUrl, favicon_url: faviconUrl, updated_at: new Date().toISOString() })
-    .eq("id", true);
-  if (error) return { error: error.message };
+    .upsert(
+      {
+        id: true,
+        logo_url: logoUrl,
+        favicon_url: faviconUrl,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" },
+    )
+    .select("logo_url, favicon_url")
+    .single();
+
+  if (error) {
+    return { error: `Failed to save branding: ${error.message}` };
+  }
+
+  if (!data) {
+    return { error: "Branding settings were not saved." };
+  }
 
   updateTag("site-settings");
+
   revalidatePath("/dashboard/settings");
   revalidatePath("/");
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/movements");
+  revalidatePath("/dashboard/assets");
+  revalidatePath("/dashboard/records");
+
   return { success: true };
 }
