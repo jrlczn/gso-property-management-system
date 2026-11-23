@@ -249,12 +249,12 @@ export type Database = {
           updated_by_role?: string | null;
         }
         Relationships: [
-          {
-            foreignKeyName: "assets_updated_by_fkey";
-            columns: ["updated_by"];
-            isOneToOne: false;
-            referencedRelation: "profiles";
-            referencedColumns: ["id"];
+         {
+          foreignKeyName: "asset_assignments_asset_id_fkey";
+          columns: ["asset_id"];
+          isOneToOne: false;
+          referencedRelation: "assets";
+          referencedColumns: ["asset_id"];
           },
           {
             foreignKeyName: "assets_category_id_fkey"

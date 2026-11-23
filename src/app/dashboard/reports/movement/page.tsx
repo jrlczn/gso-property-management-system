@@ -5,6 +5,24 @@ import { PrintButton } from "@/components/print-button";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
 
+type AssetInfo = {
+  asset_code: string | null;
+  asset_name: string | null;
+  category_id: number | null;
+};
+
+function getRelatedAsset(relation: unknown): AssetInfo | null {
+  if (Array.isArray(relation)) {
+    return (relation[0] as AssetInfo | undefined) ?? null;
+  }
+
+  if (relation && typeof relation === "object") {
+    return relation as AssetInfo;
+  }
+
+  return null;
+}
+
 export default async function MovementReportPage({
   searchParams,
 }: {
@@ -65,29 +83,50 @@ export default async function MovementReportPage({
           </tr>
         </thead>
         <tbody>
-          {(movements ?? []).map((row) => (
-            <tr key={row.assignment_id} className="border-b border-border">
-              <td className="p-2">{row.assets?.[0]?.asset_code}</td>
-              <td className="p-2">{row.assets?.[0]?.asset_name}</td>
-              <td className="p-2 capitalize">{row.status}</td>
-              <td className="p-2">{row.offices?.office_name ?? "—"}</td>
-              <td className="p-2">
-                {row.accountable_officers
-                  ? `${row.accountable_officers.first_name} ${row.accountable_officers.last_name}`
-                  : "—"}
-              </td>
-              <td className="p-2">{formatDate(row.assigned_date)}</td>
-              <td className="p-2">{formatDate(row.returned_date)}</td>
-            </tr>
-          ))}
-          {(!movements || movements.length === 0) && (
-            <tr>
-              <td colSpan={7} className="p-6 text-center text-muted-foreground">
-                No movement records to report.
-              </td>
-            </tr>
-          )}
-        </tbody>
+  {(movements ?? []).map((row) => {
+    const asset = getRelatedAsset(row.assets);
+
+    return (
+      <tr key={row.assignment_id} className="border-b border-border">
+        <td className="p-2">
+          {asset?.asset_code ?? "—"}
+        </td>
+
+        <td className="p-2">
+          {asset?.asset_name ?? "—"}
+        </td>
+
+        <td className="p-2 capitalize">{row.status}</td>
+
+        <td className="p-2">
+          {row.offices?.office_name ?? "—"}
+        </td>
+
+        <td className="p-2">
+          {row.accountable_officers
+            ? `${row.accountable_officers.first_name} ${row.accountable_officers.last_name}`
+            : "—"}
+        </td>
+
+        <td className="p-2">
+          {formatDate(row.assigned_date)}
+        </td>
+
+        <td className="p-2">
+          {formatDate(row.returned_date)}
+        </td>
+      </tr>
+    );
+  })}
+
+  {(!movements || movements.length === 0) && (
+    <tr>
+      <td colSpan={7} className="p-6 text-center text-muted-foreground">
+        No movement records to report.
+      </td>
+    </tr>
+  )}
+</tbody>
       </table>
 
       <div className="grid grid-cols-2 gap-8 pt-16 text-sm">

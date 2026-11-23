@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/print-button";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatCurrency } from "@/lib/format";
+import { getRelatedAsset } from "@/lib/get-related-asset";
+
 
 export default async function ComprehensiveReportPage({
   searchParams,
@@ -21,11 +23,18 @@ export default async function ComprehensiveReportPage({
   )
   .order("asset_code");
   let movementsQuery = supabase
-    .from("asset_assignments")
-    .select(
-      "*, assets!inner(asset_code, asset_name, category_id), accountable_officers(first_name, last_name), offices(office_name)",
-    )
-    .order("assigned_date", { ascending: false });
+  .from("asset_assignments")
+  .select(`
+    *,
+    assets!asset_assignments_asset_id_fkey!inner(
+      asset_code,
+      asset_name,
+      category_id
+    ),
+    accountable_officers(first_name, last_name),
+    offices(office_name)
+  `)
+  .order("assigned_date", { ascending: false });
   let disposalQuery = supabase
     .from("disposal")
     .select("*, assets!inner(asset_code, asset_name, category_id)")
@@ -162,20 +171,44 @@ export default async function ComprehensiveReportPage({
             </tr>
           </thead>
           <tbody>
-            {(movements ?? []).map((row) => (
-              <tr key={row.assignment_id} className="border-b border-border">
-                <td className="p-2">{row.assets?.[0]?.asset_code}</td>
-                <td className="p-2">{row.assets?.[0]?.asset_name}</td>
-                <td className="p-2 capitalize">{row.status}</td>
-                <td className="p-2">{row.offices?.office_name ?? "—"}</td>
-                <td className="p-2">
-                  {row.accountable_officers
-                    ? `${row.accountable_officers.first_name} ${row.accountable_officers.last_name}`
-                    : "—"}
-                </td>
-                <td className="p-2">{formatDate(row.assigned_date)}</td>
-              </tr>
-            ))}
+           
+{(movements ?? []).map((row) => {
+  const asset = getRelatedAsset(row.assets);
+
+  return (
+    <tr
+      key={row.assignment_id}
+      className="border-b border-border"
+    >
+      <td className="p-2">
+        {asset?.asset_code ?? "—"}
+      </td>
+
+      <td className="p-2">
+        {asset?.asset_name ?? "—"}
+      </td>
+
+      <td className="p-2 capitalize">
+        {row.status}
+      </td>
+
+      <td className="p-2">
+        {row.offices?.office_name ?? "—"}
+      </td>
+
+      <td className="p-2">
+        {row.accountable_officers
+          ? `${row.accountable_officers.first_name} ${row.accountable_officers.last_name}`
+          : "—"}
+      </td>
+
+      <td className="p-2">
+        {formatDate(row.assigned_date)}
+      </td>
+    </tr>
+  );
+})}
+
             {(!movements || movements.length === 0) && (
               <tr>
                 <td colSpan={6} className="p-6 text-center text-muted-foreground">
