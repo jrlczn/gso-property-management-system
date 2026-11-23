@@ -28,12 +28,12 @@ export function AssetScanner() {
     const supabase = createClient();
     const { data } = await supabase
       .from("assets")
-      .select("asset_code, asset_name, status, categories(category_name), offices:assigned_office_id(office_name)")
+      .select("asset_code, asset_name, status, categories(category_name), offices!assets_assigned_office_id_fkey(office_name)")
       .eq("asset_code", code)
       .maybeSingle();
 
     if (data) {
-      setResult(data as FoundAsset);
+      setResult(data as unknown as FoundAsset);
       setNotFound(null);
     } else {
       setResult(null);

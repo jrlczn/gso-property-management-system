@@ -27,13 +27,13 @@ export default async function AssetDetailPage({
 
   const { data: asset } = await supabase
     .from("assets")
-    .select("*, categories(category_name), offices:assigned_office_id(office_name)")
+    .select("*, categories(category_name)")
     .eq("asset_id", assetId)
     .single();
 
   if (!asset) notFound();
 
-  const [{ data: assignments }, { data: maintenance }, qrDataUrl] =
+  const [{ data: assignments }, { data: maintenance }, { data: office }, qrDataUrl] =
     await Promise.all([
       supabase
         .from("asset_assignments")
@@ -47,6 +47,13 @@ export default async function AssetDetailPage({
         .select("*")
         .eq("asset_id", assetId)
         .order("date_reported", { ascending: false }),
+      asset.assigned_office_id
+        ? supabase
+            .from("offices")
+            .select("office_name")
+            .eq("office_id", asset.assigned_office_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
       generateQrDataUrl(asset.asset_code),
     ]);
 
@@ -74,7 +81,7 @@ export default async function AssetDetailPage({
             </div>
             <div>
               <p className="text-xs uppercase text-muted-foreground">Department</p>
-              <p className="font-medium">{asset.offices?.office_name ?? "—"}</p>
+              <p className="font-medium">{office?.office_name ?? "—"}</p>
             </div>
             <div>
               <p className="text-xs uppercase text-muted-foreground">Brand / Model</p>

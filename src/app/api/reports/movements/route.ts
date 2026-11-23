@@ -48,8 +48,8 @@ export async function GET(request: Request) {
   ];
 
   const rows = (assignments ?? []).map((row) => [
-    row.assets?.asset_code ?? "",
-    row.assets?.asset_name ?? "",
+    row.assets?.[0]?.asset_code ?? "",
+    row.assets?.[0]?.asset_name ?? "",
     row.status,
     row.offices?.office_name ?? "",
     row.accountable_officers

@@ -125,10 +125,10 @@ export default async function DashboardPage() {
                 >
                   <div>
                     <p className="font-medium">
-                      {row.assets?.asset_name ?? "Unknown asset"}
+                      {row.assets?.[0]?.asset_name ?? "Unknown asset"}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {row.assets?.asset_code} &middot;{" "}
+                      {row.assets?.[0]?.asset_code} &middot;{" "}
                       {row.accountable_officers
                         ? `${row.accountable_officers.first_name} ${row.accountable_officers.last_name}`
                         : "Unassigned"}

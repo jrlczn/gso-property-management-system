@@ -17,7 +17,7 @@ export default async function ComprehensiveReportPage({
  let assetsQuery = supabase
   .from("assets")
   .select(
-    "*, categories(category_name), offices:assigned_office_id(office_name)",
+    "*, categories(category_name)",
   )
   .order("asset_code");
   let movementsQuery = supabase
@@ -39,6 +39,23 @@ export default async function ComprehensiveReportPage({
 
   const [{ data: assets }, { data: movements }, { data: disposals }] =
     await Promise.all([assetsQuery, movementsQuery, disposalQuery]);
+
+  const officeIds = [
+    ...new Set(
+      (assets ?? [])
+        .map((asset) => asset.assigned_office_id)
+        .filter((id): id is number => id !== null),
+    ),
+  ];
+  const { data: offices } = officeIds.length
+    ? await supabase
+        .from("offices")
+        .select("office_id, office_name")
+        .in("office_id", officeIds)
+    : { data: [] };
+  const officeNames = new Map(
+    (offices ?? []).map((office) => [office.office_id, office.office_name]),
+  );
 
   const activeAssets = (assets ?? []).filter((a) => a.status !== "disposed");
   const totalCost = activeAssets.reduce((sum, a) => sum + a.acquisition_cost, 0);
@@ -99,7 +116,11 @@ export default async function ComprehensiveReportPage({
                 <td className="p-2 text-right">
                   {formatCurrency(asset.acquisition_cost)}
                 </td>
-                <td className="p-2">{asset.offices?.office_name ?? "—"}</td>
+                <td className="p-2">
+                  {asset.assigned_office_id !== null
+                    ? officeNames.get(asset.assigned_office_id) ?? "—"
+                    : "—"}
+                </td>
                 <td className="p-2 capitalize">{asset.status}</td>
               </tr>
             ))}
@@ -143,8 +164,8 @@ export default async function ComprehensiveReportPage({
           <tbody>
             {(movements ?? []).map((row) => (
               <tr key={row.assignment_id} className="border-b border-border">
-                <td className="p-2">{row.assets?.asset_code}</td>
-                <td className="p-2">{row.assets?.asset_name}</td>
+                <td className="p-2">{row.assets?.[0]?.asset_code}</td>
+                <td className="p-2">{row.assets?.[0]?.asset_name}</td>
                 <td className="p-2 capitalize">{row.status}</td>
                 <td className="p-2">{row.offices?.office_name ?? "—"}</td>
                 <td className="p-2">

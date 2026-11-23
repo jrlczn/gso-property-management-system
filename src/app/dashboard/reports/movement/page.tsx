@@ -67,8 +67,8 @@ export default async function MovementReportPage({
         <tbody>
           {(movements ?? []).map((row) => (
             <tr key={row.assignment_id} className="border-b border-border">
-              <td className="p-2">{row.assets?.asset_code}</td>
-              <td className="p-2">{row.assets?.asset_name}</td>
+              <td className="p-2">{row.assets?.[0]?.asset_code}</td>
+              <td className="p-2">{row.assets?.[0]?.asset_name}</td>
               <td className="p-2 capitalize">{row.status}</td>
               <td className="p-2">{row.offices?.office_name ?? "—"}</td>
               <td className="p-2">

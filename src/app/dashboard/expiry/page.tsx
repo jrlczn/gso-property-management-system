@@ -19,9 +19,16 @@ export default async function ExpiryPage() {
 
   const { data: assets } = await supabase
     .from("assets")
-    .select("*, categories(category_name), offices:assigned_office_id(office_name)")
+    .select("*, categories(category_name)")
     .neq("status", "disposed")
     .order("expiration_date", { ascending: true, nullsFirst: false });
+
+  const { data: offices } = await supabase
+    .from("offices")
+    .select("office_id, office_name");
+  const officeNames = new Map(
+    (offices ?? []).map((office) => [office.office_id, office.office_name]),
+  );
 
   const rows = (assets ?? []).map((asset) => {
     const remaining = daysUntil(asset.expiration_date);
@@ -43,7 +50,11 @@ export default async function ExpiryPage() {
       else if (remaining <= 90) bucket = "warning";
     }
 
-    return { asset, remaining, lifeConsumed, bucket };
+    const officeName = asset.assigned_office_id
+      ? officeNames.get(asset.assigned_office_id) ?? "—"
+      : "—";
+
+    return { asset, remaining, lifeConsumed, bucket, officeName };
   });
 
   const counts = {
@@ -112,7 +123,7 @@ export default async function ExpiryPage() {
               </TableHeader>
               <TableBody>
                 {rows.length > 0 ? (
-                  rows.map(({ asset, remaining, lifeConsumed, bucket }) => (
+                  rows.map(({ asset, remaining, lifeConsumed, bucket, officeName }) => (
                     <TableRow key={asset.asset_id}>
                       <TableCell>
                         <Link
@@ -125,7 +136,7 @@ export default async function ExpiryPage() {
                           {asset.asset_code}
                         </div>
                       </TableCell>
-                      <TableCell>{asset.offices?.office_name ?? "—"}</TableCell>
+                      <TableCell>{officeName}</TableCell>
                       <TableCell>{formatDate(asset.acquisition_date)}</TableCell>
                       <TableCell>{asset.useful_life_years} yrs</TableCell>
                       <TableCell>{formatDate(asset.expiration_date)}</TableCell>
@@ -191,7 +202,7 @@ export default async function ExpiryPage() {
 
           <div className="space-y-3 md:hidden">
             {rows.length > 0 ? (
-              rows.map(({ asset, remaining, lifeConsumed, bucket }) => (
+              rows.map(({ asset, remaining, lifeConsumed, bucket, officeName }) => (
                 <div
                   key={asset.asset_id}
                   className="rounded-lg border border-border/60 p-3"
@@ -228,7 +239,7 @@ export default async function ExpiryPage() {
                     <div>
                       <p className="text-muted-foreground">Dept / Location</p>
                       <p className="font-medium">
-                        {asset.offices?.office_name ?? "—"}
+                        {officeName}
                       </p>
                     </div>
                     <div>

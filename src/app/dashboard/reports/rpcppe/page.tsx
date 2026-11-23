@@ -10,11 +10,12 @@ export default async function RpcppePage() {
 
   const { data: assets } = await supabase
     .from("assets")
-    .select(
-      "*, categories(category_name), offices:assigned_office_id(office_name)",
-    )
+    .select("*, categories(category_name)")
     .neq("status", "disposed")
     .order("asset_code");
+  const { data: offices } = await supabase
+    .from("offices")
+    .select("office_id, office_name");
 
   const totalCost = (assets ?? []).reduce((sum, a) => sum + a.acquisition_cost, 0);
   const today = new Date().toLocaleDateString("en-PH", {
@@ -65,7 +66,10 @@ export default async function RpcppePage() {
               <td className="p-2 text-right">
                 {formatCurrency(asset.acquisition_cost)}
               </td>
-              <td className="p-2">{asset.offices?.office_name ?? "—"}</td>
+              <td className="p-2">
+                {offices?.find((office) => office.office_id === asset.assigned_office_id)
+                  ?.office_name ?? "—"}
+              </td>
               <td className="p-2 capitalize">{asset.status}</td>
             </tr>
           ))}

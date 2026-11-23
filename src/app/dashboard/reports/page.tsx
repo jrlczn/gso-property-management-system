@@ -232,10 +232,10 @@ export default async function ReportsPage({
                     <TableRow key={row.assignment_id}>
                       <TableCell>
                         <div className="font-medium">
-                          {row.assets?.asset_name ?? "—"}
+                          {row.assets?.[0]?.asset_name ?? "—"}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {row.assets?.asset_code}
+                          {row.assets?.[0]?.asset_code}
                         </div>
                       </TableCell>
                       <TableCell>

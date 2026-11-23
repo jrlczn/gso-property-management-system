@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("assets")
-    .select("*, categories(category_name), offices:assigned_office_id(office_name)")
+    .select("*, categories(category_name)")
     .order("asset_code");
 
   if (categoryId) {
@@ -33,6 +33,11 @@ export async function GET(request: Request) {
   }
 
   const { data: assets } = await query;
+  const officeIds = [...new Set((assets ?? []).map((asset) => asset.assigned_office_id).filter((id) => id != null))];
+  const { data: offices } = officeIds.length
+    ? await supabase.from("offices").select("office_id, office_name").in("office_id", officeIds)
+    : { data: [] };
+  const officeNames = new Map((offices ?? []).map((office) => [office.office_id, office.office_name]));
 
   const headers = [
     "Property No.",
@@ -55,7 +60,7 @@ export async function GET(request: Request) {
     a.asset_code,
     a.asset_name,
     a.categories?.category_name ?? "",
-    a.offices?.office_name ?? "",
+    a.assigned_office_id != null ? officeNames.get(a.assigned_office_id) ?? "" : "",
     a.brand ?? "",
     a.model ?? "",
     a.serial_number ?? "",
