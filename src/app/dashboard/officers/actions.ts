@@ -1,3 +1,4 @@
+
 "use server";
 
 import { revalidatePath } from "next/cache";
@@ -7,12 +8,18 @@ import { blockedMessage, deleteErrorMessage } from "@/lib/delete-messages";
 import type { TablesInsert } from "@/lib/supabase/database.types";
 import type { FormActionState } from "@/hooks/use-form-success";
 
-function parseOfficerForm(formData: FormData): TablesInsert<"accountable_officers"> {
+function parseOfficerForm(
+  formData: FormData,
+): TablesInsert<"accountable_officers"> {
   const str = (key: string) => {
     const value = formData.get(key);
-    return typeof value === "string" && value.length > 0 ? value : null;
+    return typeof value === "string" && value.length > 0
+      ? value
+      : null;
   };
+
   const officeId = formData.get("office_id");
+
   return {
     employee_no: str("employee_no"),
     first_name: formData.get("first_name") as string,
@@ -26,19 +33,32 @@ function parseOfficerForm(formData: FormData): TablesInsert<"accountable_officer
   };
 }
 
+// CREATE OFFICER - ADMIN ONLY
 export async function createOfficer(
   _prevState: FormActionState,
   formData: FormData,
 ): Promise<FormActionState> {
-  await requireUser();
+  const profile = await requireUser();
+
+  if (profile.role !== "admin") {
+    return {
+      error: "Only administrators can add accountable officers.",
+    };
+  }
 
   const parsed = parseOfficerForm(formData);
+
   if (!parsed.photo_url) {
-    return { error: "A photo is required so the office can identify the custodian on sight." };
+    return {
+      error: "A photo is required so the office can identify the custodian on sight.",
+    };
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("accountable_officers").insert(parsed);
+
+  const { error } = await supabase
+    .from("accountable_officers")
+    .insert(parsed);
 
   if (error) return { error: error.message };
 
@@ -46,19 +66,30 @@ export async function createOfficer(
   return { success: true };
 }
 
+// UPDATE OFFICER - ADMIN ONLY
 export async function updateOfficer(
   officerId: number,
   _prevState: FormActionState,
   formData: FormData,
 ): Promise<FormActionState> {
-  await requireUser();
+  const profile = await requireUser();
+
+  if (profile.role !== "admin") {
+    return {
+      error: "Only administrators can edit accountable officers.",
+    };
+  }
 
   const parsed = parseOfficerForm(formData);
+
   if (!parsed.photo_url) {
-    return { error: "A photo is required so the office can identify the custodian on sight." };
+    return {
+      error: "A photo is required so the office can identify the custodian on sight.",
+    };
   }
 
   const supabase = await createClient();
+
   const { error } = await supabase
     .from("accountable_officers")
     .update(parsed)
@@ -70,10 +101,14 @@ export async function updateOfficer(
   return { success: true };
 }
 
+// DELETE OFFICER - ADMIN ONLY
 export async function deleteOfficer(officerId: number) {
   const profile = await requireUser();
+
   if (profile.role !== "admin") {
-    return { error: "Only administrators can delete accountable officers." };
+    return {
+      error: "Only administrators can delete accountable officers.",
+    };
   }
 
   const supabase = await createClient();
@@ -83,9 +118,11 @@ export async function deleteOfficer(officerId: number) {
     .select("first_name, last_name")
     .eq("officer_id", officerId)
     .maybeSingle();
+
   const label = officer
     ? `${officer.first_name} ${officer.last_name}`
     : "This officer";
+
   const advice =
     "Their issuance history must be kept, so set the officer's Status to Inactive instead (Officers > Edit). Inactive officers no longer appear when issuing assets.";
 
@@ -94,10 +131,12 @@ export async function deleteOfficer(officerId: number) {
       .from("asset_assignments")
       .select("*", { count: "exact", head: true })
       .eq("officer_id", officerId),
+
     supabase
       .from("par_records")
       .select("*", { count: "exact", head: true })
       .eq("officer_id", officerId),
+
     supabase
       .from("ics_records")
       .select("*", { count: "exact", head: true })
@@ -112,11 +151,20 @@ export async function deleteOfficer(officerId: number) {
         singular: "movement record",
         plural: "movement records",
       },
-      { count: par.count, singular: "PAR record", plural: "PAR records" },
-      { count: ics.count, singular: "ICS record", plural: "ICS records" },
+      {
+        count: par.count,
+        singular: "PAR record",
+        plural: "PAR records",
+      },
+      {
+        count: ics.count,
+        singular: "ICS record",
+        plural: "ICS records",
+      },
     ],
     advice,
   );
+
   if (blocked) return { error: blocked };
 
   const { error } = await supabase
@@ -124,7 +172,9 @@ export async function deleteOfficer(officerId: number) {
     .delete()
     .eq("officer_id", officerId);
 
-  if (error) return { error: deleteErrorMessage(error, label, advice) };
+  if (error) {
+    return { error: deleteErrorMessage(error, label, advice) };
+  }
 
   revalidatePath("/dashboard/officers");
   return undefined;

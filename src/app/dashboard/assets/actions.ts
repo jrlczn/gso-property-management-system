@@ -59,17 +59,29 @@ export async function createAsset(
   return { success: true };
 }
 
+
 export async function updateAsset(
   assetId: number,
   _prevState: AssetFormState,
   formData: FormData,
 ): Promise<AssetFormState> {
-  await requireUser();
+  const profile = await requireUser();
   const supabase = await createClient();
 
   const { error } = await supabase
     .from("assets")
-    .update(parseAssetForm(formData))
+    .update({
+      ...parseAssetForm(formData),
+
+      // EDIT TRACKING
+      updated_by: profile.id,
+      updated_by_name:
+        profile.full_name?.trim() ||
+        profile.email ||
+        "Unknown user",
+      updated_by_role: profile.role,
+      updated_at: new Date().toISOString(),
+    })
     .eq("asset_id", assetId);
 
   if (error) {
@@ -80,6 +92,7 @@ export async function updateAsset(
   revalidatePath("/dashboard");
   return { success: true };
 }
+
 
 export async function deleteAsset(assetId: number) {
   const profile = await requireUser();

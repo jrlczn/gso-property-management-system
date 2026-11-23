@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useActionState, useState } from "react";
@@ -22,7 +23,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createOfficer, updateOfficer } from "@/app/dashboard/officers/actions";
+import {
+  createOfficer,
+  updateOfficer,
+} from "@/app/dashboard/officers/actions";
 import { ImageUploadField } from "@/components/image-upload-field";
 import type { Tables } from "@/lib/supabase/database.types";
 
@@ -33,15 +37,19 @@ export function OfficerFormDialog({
   offices,
   officer,
   trigger,
+  canManage = false,
 }: {
   offices: Office[];
   officer?: Officer;
   trigger?: React.ReactNode;
+  canManage?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+
   const action = officer
     ? updateOfficer.bind(null, officer.officer_id)
     : createOfficer;
+
   const [state, formAction, isPending] = useActionState(action, null);
 
   useFormSuccessEffect(
@@ -50,20 +58,30 @@ export function OfficerFormDialog({
     () => setOpen(false),
   );
 
+  // Prevent staff from accessing the officer form.
+  if (!canManage) {
+    return null;
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger ?? (
           <Button>
-            <Plus className="h-4 w-4" /> Add Officer
+            <Plus className="h-4 w-4" />
+            Add Officer
           </Button>
         )}
       </DialogTrigger>
+
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {officer ? "Edit Accountable Officer" : "Add Accountable Officer"}
+            {officer
+              ? "Edit Accountable Officer"
+              : "Add Accountable Officer"}
           </DialogTitle>
+
           <DialogDescription>
             Personnel responsible for assigned government property.
           </DialogDescription>
@@ -89,6 +107,7 @@ export function OfficerFormDialog({
                 defaultValue={officer?.first_name}
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="last_name">Last Name</Label>
               <Input
@@ -109,6 +128,7 @@ export function OfficerFormDialog({
                 defaultValue={officer?.employee_no ?? ""}
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="position">Position</Label>
               <Input
@@ -120,14 +140,24 @@ export function OfficerFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="office_id">Office / Department</Label>
-            <Select name="office_id" defaultValue={officer?.office_id?.toString()}>
+            <Label htmlFor="office_id">
+              Office / Department
+            </Label>
+
+            <Select
+              name="office_id"
+              defaultValue={officer?.office_id?.toString()}
+            >
               <SelectTrigger id="office_id" className="w-full">
                 <SelectValue placeholder="Select office" />
               </SelectTrigger>
+
               <SelectContent>
                 {offices.map((office) => (
-                  <SelectItem key={office.office_id} value={office.office_id.toString()}>
+                  <SelectItem
+                    key={office.office_id}
+                    value={office.office_id.toString()}
+                  >
                     {office.office_name}
                   </SelectItem>
                 ))}
@@ -137,15 +167,20 @@ export function OfficerFormDialog({
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="contact_no">Contact Number</Label>
+              <Label htmlFor="contact_no">
+                Contact Number
+              </Label>
+
               <Input
                 id="contact_no"
                 name="contact_no"
                 defaultValue={officer?.contact_no ?? ""}
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
+
               <Input
                 id="email"
                 name="email"
@@ -157,10 +192,15 @@ export function OfficerFormDialog({
 
           <div className="space-y-2">
             <Label htmlFor="status">Status</Label>
-            <Select name="status" defaultValue={officer?.status ?? "active"}>
+
+            <Select
+              name="status"
+              defaultValue={officer?.status ?? "active"}
+            >
               <SelectTrigger id="status" className="w-full">
                 <SelectValue />
               </SelectTrigger>
+
               <SelectContent>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
@@ -175,9 +215,14 @@ export function OfficerFormDialog({
           )}
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+            >
               Cancel
             </Button>
+
             <Button type="submit" disabled={isPending}>
               {isPending ? "Saving..." : "Save Officer"}
             </Button>

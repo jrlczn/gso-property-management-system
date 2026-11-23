@@ -18,6 +18,25 @@ import { requireUser } from "@/lib/supabase/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
 import { deleteAsset } from "./actions";
+function getEditorLabel(
+  name: string | null,
+  role: string | null,
+  userId: string | null,
+) {
+  if (!userId) return "Not edited yet";
+
+  return `${name || "Unknown user"} (${role || "user"})`;
+}
+
+function formatEditedAt(value: string | null) {
+  if (!value) return "—";
+
+  return new Intl.DateTimeFormat("en-PH", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Manila",
+  }).format(new Date(value));
+}
 
 export default async function AssetsPage({
   searchParams,
@@ -35,7 +54,7 @@ export default async function AssetsPage({
 
   let query = supabase
     .from("assets")
-    .select("*, categories(category_name), offices:assigned_office_id(office_name)")
+    .select("*, categories(category_name)")
     .order("created_at", { ascending: false });
 
   if (status && status !== "all") {
@@ -49,6 +68,9 @@ export default async function AssetsPage({
   }
 
   const { data: assets } = await query;
+  const officeNames = new Map(
+    (offices ?? []).map((item) => [item.office_id, item.office_name]),
+  );
 
   return (
     <div className="space-y-6">
@@ -87,61 +109,111 @@ export default async function AssetsPage({
                   <TableHead>Useful Life</TableHead>
                   <TableHead>Expiry / Warranty</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Last Edited</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {assets && assets.length > 0 ? (
-                  assets.map((asset) => (
-                    <TableRow key={asset.asset_id}>
-                      <TableCell className="font-medium">
-                        <Link
-                          href={`/dashboard/assets/${asset.asset_id}`}
-                          className="hover:underline"
-                        >
-                          {asset.asset_code}
-                        </Link>
-                      </TableCell>
-                      <TableCell>{asset.asset_name}</TableCell>
-                      <TableCell>{asset.categories?.category_name ?? "—"}</TableCell>
-                      <TableCell>{asset.offices?.office_name ?? "—"}</TableCell>
-                      <TableCell>{formatDate(asset.acquisition_date)}</TableCell>
-                      <TableCell>{asset.useful_life_years} yrs</TableCell>
-                      <TableCell>{formatDate(asset.expiration_date)}</TableCell>
-                      <TableCell>
-                        <StatusBadge status={asset.status} />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button asChild variant="ghost" size="icon-sm" title="Print sticker">
-                            <Link href={`/dashboard/assets/${asset.asset_id}/sticker`}>
-                              <QrCode className="h-4 w-4" />
-                            </Link>
-                          </Button>
-                          <AssetFormDialog
-                            categories={categories ?? []}
-                            offices={offices ?? []}
-                            asset={asset}
-                            trigger={
-                              <Button variant="ghost" size="icon-sm">
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                            }
-                          />
-                          {profile.role === "admin" && (
-                            <DeleteButton
-                              action={deleteAsset.bind(null, asset.asset_id)}
-                              confirmMessage={`Delete asset "${asset.asset_name}"? This cannot be undone.`}
-                            />
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  
+assets.map((asset) => (
+  <TableRow key={asset.asset_id}>
+    <TableCell className="font-medium">
+      <Link
+        href={`/dashboard/assets/${asset.asset_id}`}
+        className="hover:underline"
+      >
+        {asset.asset_code}
+      </Link>
+    </TableCell>
+
+    <TableCell>{asset.asset_name}</TableCell>
+
+    <TableCell>
+      {asset.categories?.category_name ?? "—"}
+    </TableCell>
+
+    <TableCell>
+      {asset.assigned_office_id == null
+        ? "—"
+        : officeNames.get(asset.assigned_office_id) ?? "—"}
+    </TableCell>
+
+    <TableCell>
+      {formatDate(asset.acquisition_date)}
+    </TableCell>
+
+    <TableCell>
+      {asset.useful_life_years} yrs
+    </TableCell>
+
+    <TableCell>
+      {formatDate(asset.expiration_date)}
+    </TableCell>
+
+    <TableCell>
+      <StatusBadge status={asset.status} />
+    </TableCell>
+
+    {/* LAST EDITED */}
+    <TableCell>
+      <div className="space-y-1 text-xs">
+        <p className="font-medium">
+          {getEditorLabel(
+            asset.updated_by_name,
+            asset.updated_by_role,
+            asset.updated_by,
+          )}
+        </p>
+
+        <p className="text-muted-foreground">
+          {formatEditedAt(asset.updated_at)}
+        </p>
+      </div>
+    </TableCell>
+
+    {/* ACTIONS */}
+    <TableCell className="text-right">
+      <div className="flex justify-end gap-1">
+        <Button
+          asChild
+          variant="ghost"
+          size="icon-sm"
+          title="Print sticker"
+        >
+          <Link
+            href={`/dashboard/assets/${asset.asset_id}/sticker`}
+          >
+            <QrCode className="h-4 w-4" />
+          </Link>
+        </Button>
+
+        <AssetFormDialog
+          categories={categories ?? []}
+          offices={offices ?? []}
+          asset={asset}
+          trigger={
+            <Button variant="ghost" size="icon-sm">
+              <Pencil className="h-4 w-4" />
+            </Button>
+          }
+        />
+
+        {profile.role === "admin" && (
+          <DeleteButton
+            action={deleteAsset.bind(null, asset.asset_id)}
+            confirmMessage={`Delete asset "${asset.asset_name}"? This cannot be undone.`}
+          />
+        )}
+      </div>
+    </TableCell>
+  </TableRow>
+))
+
                 ) : (
                   <TableRow>
                     <TableCell
-                      colSpan={9}
+                      colSpan={10}
                       className="py-10 text-center text-sm text-muted-foreground"
                     >
                       No assets found. Add your first asset to get started.
@@ -183,7 +255,9 @@ export default async function AssetsPage({
                     <div>
                       <p className="text-muted-foreground">Department</p>
                       <p className="font-medium">
-                        {asset.offices?.office_name ?? "—"}
+                        {asset.assigned_office_id == null
+                          ? "—"
+                          : officeNames.get(asset.assigned_office_id) ?? "—"}
                       </p>
                     </div>
                     <div>
@@ -201,6 +275,23 @@ export default async function AssetsPage({
                       <p className="font-medium">
                         {formatDate(asset.expiration_date)}
                       </p>
+                      <div className="col-span-2">
+                      <p className="text-muted-foreground">
+                        Last Edited
+                      </p>
+
+                      <p className="font-medium">
+                        {getEditorLabel(
+                          asset.updated_by_name,
+                          asset.updated_by_role,
+                          asset.updated_by,
+                        )}
+                      </p>
+
+                      <p className="text-muted-foreground">
+                        {formatEditedAt(asset.updated_at)}
+                      </p>
+                    </div>
                     </div>
                   </div>
                   <div className="mt-3 flex justify-end gap-1 border-t border-border/60 pt-2">

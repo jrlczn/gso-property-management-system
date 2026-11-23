@@ -2,7 +2,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireUser } from "@/lib/supabase/auth";
+import {requireUser,requireAdmin,} from "@/lib/supabase/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { FormActionState } from "@/hooks/use-form-success";
 
@@ -12,8 +12,10 @@ function refreshMovementPages() {
   revalidatePath("/dashboard/movements");
   revalidatePath("/dashboard/assets");
   revalidatePath("/dashboard/records");
+  revalidatePath("/dashboard/archive-history");
   revalidatePath("/dashboard");
 }
+
 
 function makeDocumentNumber(
   type: DocumentType,
@@ -282,19 +284,29 @@ export async function updateMovement(
         : makeDocumentNumber(docType, assignedDate, assignmentId)
       : "";
 
-  // Update existing movement. Do not insert a new movement.
-  const { error: movementError } = await supabase
-    .from("asset_assignments")
-    .update({
-      asset_id: assetId,
-      officer_id: officerId,
-      office_id: officeId,
-      status,
-      assigned_date: assignedDate,
-      returned_date: status === "returned" ? assignedDate : null,
-      remarks,
-    })
-    .eq("assignment_id", assignmentId);
+// Update existing movement. Do not insert a new movement.
+const { error: movementError } = await supabase
+  .from("asset_assignments")
+  .update({
+    asset_id: assetId,
+    officer_id: officerId,
+    office_id: officeId,
+    status,
+    assigned_date: assignedDate,
+    returned_date: status === "returned" ? assignedDate : null,
+    remarks,
+
+    // EDIT TRACKING
+    updated_by: profile.id,
+    updated_by_name:
+      profile.full_name?.trim() ||
+      profile.email ||
+      "Unknown user",
+    updated_by_role: profile.role,
+    updated_at: new Date().toISOString(),
+  })
+  .eq("assignment_id", assignmentId);
+
 
   if (movementError) {
     return { error: movementError.message };
@@ -473,7 +485,7 @@ export async function updateMovement(
 export async function deleteMovement(
   assignmentId: number,
 ): Promise<{ success?: boolean; error?: string }> {
-  await requireUser();
+  await requireAdmin();
 
   const supabase = await createClient();
 
@@ -565,4 +577,93 @@ export async function deleteMovement(
   refreshMovementPages();
 
   return { success: true };
+}
+
+
+// ARCHIVE MOVEMENT - STAFF ONLY
+export async function archiveMovement(
+  assignmentId: number,
+): Promise<{ success?: boolean; error?: string }> {
+  const profile = await requireUser();
+
+  // Only staff can archive movement records.
+  if (profile.role !== "staff") {
+    return {
+      error: "Only staff accounts can archive movement records.",
+    };
+  }
+
+  const supabase = await createClient();
+
+  if (!Number.isInteger(assignmentId) || assignmentId <= 0) {
+    return { error: "Invalid transaction ID." };
+  }
+
+  // Soft archive: preserve the original database record.
+  const { data: archived, error } = await supabase
+    .from("asset_assignments")
+    .update({
+      archived_at: new Date().toISOString(),
+    } as never)
+    .eq("assignment_id", assignmentId)
+    .is("archived_at" as never, null)
+    .select("assignment_id")
+    .maybeSingle();
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  if (!archived) {
+    return {
+      error: "Transaction not found or already archived.",
+    };
+  }
+
+  refreshMovementPages();
+
+  return { success: true };
+}
+
+// RESTORE ARCHIVED MOVEMENT - ADMIN ONLY
+export async function restoreMovement(
+  assignmentId: number,
+): Promise<{ success?: boolean; error?: string }> {
+  await requireAdmin();
+
+  const supabase = await createClient();
+
+  if (!Number.isInteger(assignmentId) || assignmentId <= 0) {
+    return {
+      error: "Invalid transaction ID.",
+    };
+  }
+
+  const { data: restored, error } = await supabase
+    .from("asset_assignments")
+    .update({
+      archived_at: null,
+    } as never)
+    .eq("assignment_id", assignmentId)
+    .not("archived_at", "is", null)
+    .select("assignment_id")
+    .maybeSingle();
+
+  if (error) {
+    return {
+      error: error.message,
+    };
+  }
+
+  if (!restored) {
+    return {
+      error: "Archived transaction not found or already restored.",
+    };
+  }
+
+  refreshMovementPages();
+
+  return {
+    success: true,
+  };
 }

@@ -1,9 +1,11 @@
+
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   AlertTriangle,
+  Archive,
   ArrowLeftRight,
   BarChart3,
   Boxes,
@@ -15,7 +17,9 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
+
 import { SiteLogo } from "@/components/site-logo";
+
 import {
   Sidebar,
   SidebarContent,
@@ -28,6 +32,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+
 import { Button } from "@/components/ui/button";
 import type { Tables } from "@/lib/supabase/database.types";
 import { logout } from "@/app/dashboard/actions";
@@ -43,14 +48,34 @@ const mainNav = [
     label: "Movement & Issuance",
     icon: ArrowLeftRight,
   },
-  { href: "/dashboard/disposal", label: "Disposal & Write-off", icon: Trash2 },
+  {
+    href: "/dashboard/disposal",
+    label: "Disposal & Write-off",
+    icon: Trash2,
+  },
 ];
 
 const managementNav = [
-  { href: "/dashboard/officers", label: "Accountable Officers", icon: Users },
-  { href: "/dashboard/records", label: "PAR/ICS Records", icon: FileText },
-  { href: "/dashboard/reports", label: "Reports", icon: BarChart3 },
-  { href: "/dashboard/alerts", label: "Alerts", icon: AlertTriangle },
+  {
+    href: "/dashboard/officers",
+    label: "Accountable Officers",
+    icon: Users,
+  },
+  {
+    href: "/dashboard/records",
+    label: "PAR/ICS Records",
+    icon: FileText,
+  },
+  {
+    href: "/dashboard/reports",
+    label: "Reports",
+    icon: BarChart3,
+  },
+  {
+    href: "/dashboard/alerts",
+    label: "Alerts",
+    icon: AlertTriangle,
+  },
 ];
 
 function NavGroup({
@@ -65,6 +90,7 @@ function NavGroup({
   return (
     <SidebarGroup>
       <SidebarGroupLabel>{label}</SidebarGroupLabel>
+
       <SidebarGroupContent>
         <SidebarMenu>
           {items.map((item) => (
@@ -98,6 +124,7 @@ export function AppSidebar({
   logoUrl?: string | null;
 }) {
   const pathname = usePathname();
+
   const initials = (profile.full_name ?? profile.email ?? "?")
     .split(" ")
     .map((part) => part[0])
@@ -113,8 +140,12 @@ export function AppSidebar({
             logoUrl={logoUrl}
             className="h-5 w-5 shrink-0 text-sidebar-primary"
           />
+
           <div className="flex flex-col leading-tight group-data-[collapsible=icon]:hidden">
-            <span className="text-sm font-semibold">GSO-PMS</span>
+            <span className="text-sm font-semibold">
+              GSO-PMS
+            </span>
+
             <span className="text-xs text-sidebar-foreground/60">
               Municipality of Villanueva
             </span>
@@ -123,13 +154,33 @@ export function AppSidebar({
       </SidebarHeader>
 
       <SidebarContent>
-        <NavGroup label="Main" items={mainNav} pathname={pathname} />
-        <NavGroup label="Management" items={managementNav} pathname={pathname} />
+        <NavGroup
+          label="Main"
+          items={mainNav}
+          pathname={pathname}
+        />
+
+        <NavGroup
+          label="Management"
+          items={managementNav}
+          pathname={pathname}
+        />
+
+        {/* ADMIN-ONLY SYSTEM MENU */}
         {profile.role === "admin" && (
           <NavGroup
             label="System"
             items={[
-              { href: "/dashboard/settings", label: "Settings", icon: Settings },
+              {
+                href: "/dashboard/archive-history",
+                label: "Archive History",
+                icon: Archive,
+              },
+              {
+                href: "/dashboard/settings",
+                label: "Settings",
+                icon: Settings,
+              },
             ]}
             pathname={pathname}
           />
@@ -141,15 +192,21 @@ export function AppSidebar({
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold">
             {initials}
           </div>
+
           <div className="flex min-w-0 flex-1 flex-col leading-tight group-data-[collapsible=icon]:hidden">
             <span className="truncate text-sm font-medium">
               {profile.full_name ?? profile.email}
             </span>
+
             <span className="text-xs capitalize text-sidebar-foreground/60">
               {profile.role}
             </span>
           </div>
-          <form action={logout} className="group-data-[collapsible=icon]:hidden">
+
+          <form
+            action={logout}
+            className="group-data-[collapsible=icon]:hidden"
+          >
             <Button
               type="submit"
               variant="ghost"

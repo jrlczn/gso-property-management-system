@@ -1,3 +1,4 @@
+
 import { Pencil } from "lucide-react";
 import {
   Table,
@@ -19,10 +20,16 @@ import { deleteOfficer } from "./actions";
 
 export default async function OfficersPage() {
   const profile = await requireUser();
+
+  // Identify whether the logged-in user is an administrator.
+  const isAdmin =
+    String(profile.role).trim().toLowerCase() === "admin";
+
   const supabase = await createClient();
 
   const [{ data: offices }, { data: officers }] = await Promise.all([
     supabase.from("offices").select("*").order("office_name"),
+
     supabase
       .from("accountable_officers")
       .select("*, offices(office_name)")
@@ -31,20 +38,30 @@ export default async function OfficersPage() {
 
   return (
     <div className="space-y-6">
+      {/* PAGE HEADER */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
             Accountable Officers
           </h1>
+
           <p className="text-sm text-muted-foreground">
             Personnel responsible for assigned government property
           </p>
         </div>
-        <OfficerFormDialog offices={offices ?? []} />
+
+        {/* ADD OFFICER - ADMIN ONLY */}
+        {isAdmin && (
+          <OfficerFormDialog
+            offices={offices ?? []}
+            canManage={isAdmin}
+          />
+        )}
       </div>
 
       <Card>
         <CardContent>
+          {/* DESKTOP TABLE */}
           <div className="hidden overflow-x-auto md:block">
             <Table>
               <TableHeader>
@@ -57,9 +74,15 @@ export default async function OfficersPage() {
                   <TableHead>Contact No.</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+
+                  {isAdmin && (
+                    <TableHead className="text-right">
+                      Actions
+                    </TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
+
               <TableBody>
                 {officers && officers.length > 0 ? (
                   officers.map((officer) => (
@@ -70,44 +93,73 @@ export default async function OfficersPage() {
                           alt={`${officer.first_name} ${officer.last_name}`}
                         />
                       </TableCell>
+
                       <TableCell className="font-medium">
                         {officer.employee_no ?? "—"}
                       </TableCell>
+
                       <TableCell>
                         {officer.first_name} {officer.last_name}
                       </TableCell>
-                      <TableCell>{officer.position ?? "—"}</TableCell>
-                      <TableCell>{officer.offices?.office_name ?? "—"}</TableCell>
-                      <TableCell>{officer.contact_no ?? "—"}</TableCell>
-                      <TableCell>{officer.email ?? "—"}</TableCell>
+
+                      <TableCell>
+                        {officer.position ?? "—"}
+                      </TableCell>
+
+                      <TableCell>
+                        {officer.offices?.office_name ?? "—"}
+                      </TableCell>
+
+                      <TableCell>
+                        {officer.contact_no ?? "—"}
+                      </TableCell>
+
+                      <TableCell>
+                        {officer.email ?? "—"}
+                      </TableCell>
+
                       <TableCell>
                         <StatusBadge status={officer.status} />
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <OfficerFormDialog
-                            offices={offices ?? []}
-                            officer={officer}
-                            trigger={
-                              <Button variant="ghost" size="icon-sm">
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                            }
-                          />
-                          {profile.role === "admin" && (
+
+                      {/* ADMIN ACTIONS ONLY */}
+                      {isAdmin && (
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+
+                            {/* EDIT OFFICER */}
+                            <OfficerFormDialog
+                              offices={offices ?? []}
+                              officer={officer}
+                              canManage={isAdmin}
+                              trigger={
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  title="Edit officer"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              }
+                            />
+
+                            {/* DELETE OFFICER */}
                             <DeleteButton
-                              action={deleteOfficer.bind(null, officer.officer_id)}
+                              action={deleteOfficer.bind(
+                                null,
+                                officer.officer_id,
+                              )}
                               confirmMessage={`Delete officer "${officer.first_name} ${officer.last_name}"? This cannot be undone.`}
                             />
-                          )}
-                        </div>
-                      </TableCell>
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
                     <TableCell
-                      colSpan={9}
+                      colSpan={isAdmin ? 9 : 8}
                       className="py-10 text-center text-sm text-muted-foreground"
                     >
                       No accountable officers registered yet.
@@ -118,6 +170,7 @@ export default async function OfficersPage() {
             </Table>
           </div>
 
+          {/* MOBILE CARDS */}
           <div className="space-y-3 md:hidden">
             {officers && officers.length > 0 ? (
               officers.map((officer) => (
@@ -131,54 +184,89 @@ export default async function OfficersPage() {
                         url={officer.photo_url}
                         alt={`${officer.first_name} ${officer.last_name}`}
                       />
+
                       <div className="min-w-0">
                         <p className="font-medium">
                           {officer.first_name} {officer.last_name}
                         </p>
+
                         <p className="truncate text-sm text-muted-foreground">
                           {officer.employee_no ?? "—"}
                         </p>
                       </div>
                     </div>
+
                     <StatusBadge status={officer.status} />
                   </div>
+
                   <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
                     <div>
-                      <p className="text-muted-foreground">Position</p>
-                      <p className="font-medium">{officer.position ?? "—"}</p>
+                      <p className="text-muted-foreground">
+                        Position
+                      </p>
+                      <p className="font-medium">
+                        {officer.position ?? "—"}
+                      </p>
                     </div>
+
                     <div>
-                      <p className="text-muted-foreground">Office</p>
+                      <p className="text-muted-foreground">
+                        Office
+                      </p>
                       <p className="font-medium">
                         {officer.offices?.office_name ?? "—"}
                       </p>
                     </div>
+
                     <div>
-                      <p className="text-muted-foreground">Contact No.</p>
-                      <p className="font-medium">{officer.contact_no ?? "—"}</p>
+                      <p className="text-muted-foreground">
+                        Contact No.
+                      </p>
+                      <p className="font-medium">
+                        {officer.contact_no ?? "—"}
+                      </p>
                     </div>
+
                     <div>
-                      <p className="text-muted-foreground">Email</p>
-                      <p className="truncate font-medium">{officer.email ?? "—"}</p>
+                      <p className="text-muted-foreground">
+                        Email
+                      </p>
+                      <p className="truncate font-medium">
+                        {officer.email ?? "—"}
+                      </p>
                     </div>
                   </div>
-                  <div className="mt-3 flex justify-end gap-1 border-t border-border/60 pt-2">
-                    <OfficerFormDialog
-                      offices={offices ?? []}
-                      officer={officer}
-                      trigger={
-                        <Button variant="ghost" size="icon-sm">
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      }
-                    />
-                    {profile.role === "admin" && (
+
+                  {/* MOBILE ADMIN ACTIONS ONLY */}
+                  {isAdmin && (
+                    <div className="mt-3 flex justify-end gap-1 border-t border-border/60 pt-2">
+
+                      {/* EDIT OFFICER */}
+                      <OfficerFormDialog
+                        offices={offices ?? []}
+                        officer={officer}
+                        canManage={isAdmin}
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            title="Edit officer"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        }
+                      />
+
+                      {/* DELETE OFFICER */}
                       <DeleteButton
-                        action={deleteOfficer.bind(null, officer.officer_id)}
+                        action={deleteOfficer.bind(
+                          null,
+                          officer.officer_id,
+                        )}
                         confirmMessage={`Delete officer "${officer.first_name} ${officer.last_name}"? This cannot be undone.`}
                       />
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               ))
             ) : (

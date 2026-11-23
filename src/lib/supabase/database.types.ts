@@ -106,6 +106,10 @@ export type Database = {
           remarks: string | null
           returned_date: string | null
           status: string
+          updated_at: string | null;
+          updated_by: string | null;
+          updated_by_name: string | null;
+          updated_by_role: string | null; 
         }
         Insert: {
           asset_id: number
@@ -116,6 +120,10 @@ export type Database = {
           remarks?: string | null
           returned_date?: string | null
           status?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          updated_by_name?: string | null
+          updated_by_role?: string | null 
         }
         Update: {
           asset_id?: number
@@ -126,14 +134,18 @@ export type Database = {
           remarks?: string | null
           returned_date?: string | null
           status?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          updated_by_name?: string | null
+          updated_by_role?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "asset_assignments_asset_id_fkey"
-            columns: ["asset_id"]
-            isOneToOne: false
-            referencedRelation: "assets"
-            referencedColumns: ["asset_id"]
+            foreignKeyName: "asset_assignments_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "asset_assignments_office_id_fkey"
@@ -175,6 +187,10 @@ export type Database = {
           useful_life_years: number
           warranty_alert_days_before: number
           warranty_expiry: string | null
+          updated_at: string | null;
+          updated_by: string | null;
+          updated_by_name: string | null;
+          updated_by_role: string | null;
         }
         Insert: {
           acquisition_cost?: number
@@ -199,6 +215,10 @@ export type Database = {
           useful_life_years?: number
           warranty_alert_days_before?: number
           warranty_expiry?: string | null
+          updated_at?: string | null;
+          updated_by?: string | null;
+          updated_by_name?: string | null;
+          updated_by_role?: string | null;
         }
         Update: {
           acquisition_cost?: number
@@ -223,14 +243,18 @@ export type Database = {
           useful_life_years?: number
           warranty_alert_days_before?: number
           warranty_expiry?: string | null
+          updated_at?: string | null;
+          updated_by?: string | null;
+          updated_by_name?: string | null;
+          updated_by_role?: string | null;
         }
         Relationships: [
           {
-            foreignKeyName: "assets_assigned_office_id_fkey"
-            columns: ["assigned_office_id"]
-            isOneToOne: false
-            referencedRelation: "offices"
-            referencedColumns: ["office_id"]
+            foreignKeyName: "assets_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "assets_category_id_fkey"
